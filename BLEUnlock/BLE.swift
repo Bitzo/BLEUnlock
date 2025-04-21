@@ -430,15 +430,30 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
             let str: String? = String(data: value, encoding: .utf8)
             if let s = str {
                 if let device = devices[peripheral.identifier] {
-                    if characteristic.uuid == ManufacturerName {
-                        device.manufacture = s
+                    // 只有在设备没有有效自定义名称的情况下才更新信息
+                    let hasCustomName = device.blName != nil && device.blName != "iPhone" && device.blName != "iPad"
+                    if !hasCustomName {
+                        if characteristic.uuid == ManufacturerName {
+                            device.manufacture = s
+                            print("更新设备制造商: \(s) (设备: \(device.description))")
+                            delegate?.updateDevice(device: device)
+                        }
+                        if characteristic.uuid == ModelName {
+                            device.model = s
+                            print("更新设备型号: \(s) (设备: \(device.description))")
                         delegate?.updateDevice(device: device)
-                    }
-                    if characteristic.uuid == ModelName {
-                        device.model = s
                         delegate?.updateDevice(device: device)
+                            delegate?.updateDevice(device: device)
+                        }
+                    } else {
+                        if characteristic.uuid == ManufacturerName {
+                            print("跳过更新制造商 \(s) - 已有自定义名称: \(device.description)")
+                        }
+                        if characteristic.uuid == ModelName {
+                            print("跳过更新型号 \(s) - 已有自定义名称: \(device.description)")
+                        }
                     }
-                    if device.model != nil && device.model != nil && device.peripheral != monitoredPeripheral {
+                    if device.model != nil && device.manufacture != nil && device.peripheral != monitoredPeripheral {
                         centralMgr.cancelPeripheralConnection(peripheral)
                     }
                 }

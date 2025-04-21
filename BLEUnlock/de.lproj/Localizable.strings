@@ -30,6 +30,7 @@
 "seconds" = "seconds";
 "set_password" = "Passwort setzen…";
 "set_rssi_threshold" = "Setze Minimum RSSI…";
+"show_rssi_in_statusbar" = "RSSI in der Statusleiste anzeigen";
 "sleep_display" = "Bildschirm beim Sperren ausschalten";
 "timeout" = "Kein-Signal Zeitablauf";
 "unlock_rssi" = "RSSI entsperren";

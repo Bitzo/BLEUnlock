@@ -116,6 +116,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         deviceDict.removeValue(forKey: device.uuid)
     }
 
+    // 辅助方法：返回适合状态栏显示的缩短文本
+    func shortStatusText(_ text: String) -> String {
+        // 截取字符串以适合状态栏宽度，最多保留10个字符
+        let maxLength = 10
+        if text.count <= maxLength {
+            return " " + text
+        }
+        
+        // 如果文本太长，截取并添加省略号
+        let endIndex = text.index(text.startIndex, offsetBy: maxLength - 3)
+        return " " + text[..<endIndex] + "..."
+    }
+    
     func updateRSSI(rssi: Int?, active: Bool) {
         if let r = rssi {
             lastRSSI = r
@@ -124,11 +137,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
                 connected = true
                 statusItem.button?.image = NSImage(named: "StatusBarConnected")
             }
+            // 只有在勾选显示RSSI选项时才在状态栏显示RSSI值
+            if prefs.bool(forKey: "showRSSIInStatusBar") {
+                statusItem.button?.title = String(format: " %d dBm", r)
+            } else {
+                statusItem.button?.title = ""
+            }
         } else {
             monitorMenuItem?.title = t("not_detected")
             if (connected) {
                 connected = false
                 statusItem.button?.image = NSImage(named: "StatusBarDisconnected")
+            }
+            // 如果启用了状态栏显示RSSI，在设备失去连接时显示提示
+            if prefs.bool(forKey: "showRSSIInStatusBar") {
+                statusItem.button?.title = shortStatusText(t("not_detected"))
+            } else {
+                statusItem.button?.title = ""
             }
         }
     }
@@ -234,6 +259,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
                 tryUnlockScreen()
             }
         } else {
+            // 如果启用了状态栏显示RSSI，更新状态栏以显示离开原因
+            if prefs.bool(forKey: "showRSSIInStatusBar") {
+                if reason == "lost" {
+                    statusItem.button?.title = shortStatusText(t("notification_lost_signal"))
+                } else if reason == "away" {
+                    statusItem.button?.title = shortStatusText(t("notification_device_away"))
+                }
+            }
+            
             if (!isScreenLocked() && ble.lockRSSI != ble.LOCK_DISABLED) {
                 pauseNowPlaying()
                 lockOrSaveScreen()
@@ -381,6 +415,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         connected = false
         statusItem.button?.image = NSImage(named: "StatusBarDisconnected")
         monitorMenuItem?.title = t("not_detected")
+        // 如果启用了状态栏显示RSSI，显示正在连接提示
+        if prefs.bool(forKey: "showRSSIInStatusBar") {
+            statusItem.button?.title = shortStatusText(t("scanning"))
+        } else {
+            statusItem.button?.title = ""
+        }
         ble.startMonitor(uuid: uuid)
     }
 
@@ -552,6 +592,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         menuItem.state = wakeWithoutUnlocking ? .on : .off
     }
 
+    @objc func toggleShowRSSIInStatusBar(_ menuItem: NSMenuItem) {
+        let value = !prefs.bool(forKey: "showRSSIInStatusBar")
+        prefs.set(value, forKey: "showRSSIInStatusBar")
+        menuItem.state = value ? .on : .off
+        if let r = lastRSSI, value {
+            statusItem.button?.title = String(format: " %d dBm", r)
+        } else {
+            statusItem.button?.title = ""
+        }
+    }
+
     @objc func lockNow() {
         guard !isScreenLocked() else { return }
         manualLock = true
@@ -628,6 +679,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             item.state = .on
         }
 
+        item = mainMenu.addItem(withTitle: t("show_rssi_in_statusbar"), action: #selector(toggleShowRSSIInStatusBar), keyEquivalent: "")
+        if prefs.bool(forKey: "showRSSIInStatusBar") {
+            item.state = .on
+        }
+
         item = mainMenu.addItem(withTitle: t("pause_now_playing"), action: #selector(togglePauseNowPlaying), keyEquivalent: "")
         if prefs.bool(forKey: "pauseItunes") {
             item.state = .on
@@ -676,6 +732,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         if let button = statusItem.button {
             button.image = NSImage(named: "StatusBarDisconnected")
+            button.imagePosition = .imageLeft
+            button.title = ""
             constructMenu()
         }
         ble.delegate = self
@@ -704,6 +762,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         let lockDelay = prefs.integer(forKey: "lockDelay")
         if lockDelay != 0 {
             ble.proximityTimeout = Double(lockDelay)
+        }
+        
+        // 初始化时检查是否显示RSSI
+        if let r = lastRSSI, prefs.bool(forKey: "showRSSIInStatusBar") {
+            statusItem.button?.title = String(format: " %d dBm", r)
+        } else if prefs.bool(forKey: "showRSSIInStatusBar") {
+            statusItem.button?.title = shortStatusText(t("not_detected"))
+        } else {
+            statusItem.button?.title = ""
         }
 
         NSUserNotificationCenter.default.delegate = self
